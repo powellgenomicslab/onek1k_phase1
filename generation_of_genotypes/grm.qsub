@@ -1,0 +1,19 @@
+## SGE SETTINGS
+#$ -cwd
+#$ -S /bin/bash
+#$ -q short.q
+#$ -r yes
+#$ -l mem_requested=10G
+#$ -l tmp_requested=10G
+#$ -N grm
+
+cd $SGE_O_WORKDIR
+BIN=$SGE_O_WORKDIR/../bin
+export PATH=$PATH:$BIN
+
+INPUT=het_filter/het_filter
+OUTPUT=grm
+mkdir $OUTPUT
+awk '$1 == "2324"' $INPUT.bim | cut -f2 > ${OUTPUT}/y_par.snps
+plink --bfile ${INPUT} --exclude ${OUTPUT}/y_par.snps --make-bed --out ${OUTPUT}/${OUTPUT} --noweb
+gcta64 --bfile ${OUTPUT}/${OUTPUT} --make-grm --out ${OUTPUT}/${OUTPUT}

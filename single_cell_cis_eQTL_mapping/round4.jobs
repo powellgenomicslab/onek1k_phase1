@@ -1,0 +1,14 @@
+qsub -t 1:22 round4.run_spearman_rank_test.sh BimmNaive_array.txt
+qsub -t 1:22 round4.run_spearman_rank_test.sh Bmem_array.txt
+qsub -t 1:22 round4.run_spearman_rank_test.sh CD4all_array.txt
+qsub -t 1:22 round4.run_spearman_rank_test.sh CD4eff_cm_array.txt
+qsub -t 1:22 round4.run_spearman_rank_test.sh CD4TGFbStim_array.txt
+qsub -t 1:22 round4.run_spearman_rank_test.sh CD8all_array.txt
+qsub -t 1:22 round4.run_spearman_rank_test.sh CD8eff_array.txt
+qsub -t 1:22 round4.run_spearman_rank_test.sh CD8unknown_array.txt
+qsub -t 1:22 round4.run_spearman_rank_test.sh DC_array.txt
+qsub -t 1:22 round4.run_spearman_rank_test.sh MonoC_array.txt
+qsub -t 1:22 round4.run_spearman_rank_test.sh MonoNC_array.txt
+qsub -t 1:22 round4.run_spearman_rank_test.sh NKact_array.txt
+qsub -t 1:22 round4.run_spearman_rank_test.sh NKmat_array.txt
+qsub -t 1:22 round4.run_spearman_rank_test.sh Plasma_array.txt

@@ -1,0 +1,19 @@
+## SGE SETTINGS
+#$ -cwd
+#$ -S /bin/bash
+#$ -q short.q
+#$ -r yes
+#$ -l mem_requested=5G
+#$ -l tmp_requested=5G
+#$ -N indiv_missingness
+
+cd $SGE_O_WORKDIR
+BIN=$SGE_O_WORKDIR/../bin
+export PATH=$PATH:$BIN
+
+INPUT=snp_missingness/snp_missingness
+OUTPUT=indiv_missingness
+mkdir $OUTPUT
+MIND=0.03
+plink --bfile ${INPUT} --make-bed --mind ${MIND} --out ${OUTPUT}/${OUTPUT} --noweb
+

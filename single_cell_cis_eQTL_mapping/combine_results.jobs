@@ -1,0 +1,5 @@
+qsub combine_results_leads.sh
+qsub combine_results_rest.sh 2
+qsub combine_results_rest.sh 3
+qsub combine_results_rest.sh 4
+qsub combine_results_rest.sh 5

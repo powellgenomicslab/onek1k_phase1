@@ -1,0 +1,18 @@
+# Submit these qsub jobs to identify significant trans eQTLs
+
+cd "/directflow/SCCGGroupShare/projects/SeyhanYazar/onek1k/Scripts/abf3041_revision/trans_eqtl_analysis"
+
+qsub step7_identify_significant_trans_eqtls.sh BimmNaive
+qsub step7_identify_significant_trans_eqtls.sh Bmem
+qsub step7_identify_significant_trans_eqtls.sh CD4all
+qsub step7_identify_significant_trans_eqtls.sh CD4effCM
+qsub step7_identify_significant_trans_eqtls.sh CD4TGFbStim
+qsub step7_identify_significant_trans_eqtls.sh CD8all
+qsub step7_identify_significant_trans_eqtls.sh CD8eff
+qsub step7_identify_significant_trans_eqtls.sh CD8unknown
+qsub step7_identify_significant_trans_eqtls.sh DC
+qsub step7_identify_significant_trans_eqtls.sh MonoC
+qsub step7_identify_significant_trans_eqtls.sh MonoNC
+qsub step7_identify_significant_trans_eqtls.sh NKact
+qsub step7_identify_significant_trans_eqtls.sh NKmat
+qsub step7_identify_significant_trans_eqtls.sh Plasma

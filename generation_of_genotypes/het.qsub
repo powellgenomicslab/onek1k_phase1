@@ -1,0 +1,21 @@
+## SGE SETTINGS
+#$ -cwd
+#$ -S /bin/bash
+#$ -q short.q
+#$ -r yes
+#$ -l mem_requested=5G
+#$ -l tmp_requested=5G
+#$ -N het
+
+cd $SGE_O_WORKDIR
+BIN=$SGE_O_WORKDIR/../bin
+export PATH=$PATH:$BIN
+module load briglo/R/3.5.1
+
+
+INPUT=hwe/hwe
+OUTPUT=het
+mkdir $OUTPUT
+plink --bfile ${INPUT} --het --out ${OUTPUT}/${OUTPUT} --noweb
+Rscript filter_het.R ${OUTPUT}/${OUTPUT}.het ${OUTPUT}/${OUTPUT}.inds
+

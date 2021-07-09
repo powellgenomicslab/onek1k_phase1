@@ -1,0 +1,27 @@
+## SGE SETTINGS
+#$ -cwd
+#$ -S /bin/bash
+#$ -q short.q
+#$ -r yes
+#$ -l mem_requested=10G
+#$ -l tmp_requested=10G
+#$ -N forward_strand
+
+cd $SGE_O_WORKDIR
+export PATH=/share/ClusterShare/software/contrib/sccg:$PATH
+export PATH=/share/ClusterShare/software/contrib/sccg/anaconda2/bin/:$PATH
+
+
+INPUT=grm_subset/grm_subset
+OUTPUT=forward_strand
+
+mkdir ${OUTPUT}
+
+# Get strand diagnostics
+snpflip -b ${INPUT}.bim -f ../data/hg19/hg19.fa -o ${OUTPUT}/${OUTPUT}_snpflip
+
+# Remove ambiguous SNPs
+plink --bfile ${INPUT} --exclude ${OUTPUT}/${OUTPUT}_snpflip.ambiguous --make-bed --out ${OUTPUT}/${OUTPUT}_noambiguous --noweb
+
+# Flip SNPs with reverse strand genotypes
+plink --bfile ${OUTPUT}/${OUTPUT}_noambiguous --flip ${OUTPUT}/${OUTPUT}_snpflip.reverse --make-bed --out ${OUTPUT}/${OUTPUT} --noweb

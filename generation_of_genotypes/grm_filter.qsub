@@ -1,0 +1,18 @@
+## SGE SETTINGS
+#$ -cwd
+#$ -S /bin/bash
+#$ -q short.q
+#$ -r yes
+#$ -l mem_requested=10G
+#$ -l tmp_requested=10G
+#$ -N grm_filter
+
+cd $SGE_O_WORKDIR
+BIN=$SGE_O_WORKDIR/../bin
+export PATH=$PATH:$BIN
+
+INPUT=grm/grm
+OUTPUT=grm_filter
+mkdir $OUTPUT
+gcta64 --grm ${INPUT} --grm-cutoff 0.125 --make-grm --out ${OUTPUT}/${OUTPUT}
+gcta64 --grm ${OUTPUT}/${OUTPUT} --pca 6 --out ${OUTPUT}/${OUTPUT}

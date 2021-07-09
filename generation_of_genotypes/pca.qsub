@@ -1,0 +1,22 @@
+## SGE SETTINGS
+#$ -cwd
+#$ -S /bin/bash
+#$ -q short.q
+#$ -r yes
+#$ -l mem_requested=5G
+#$ -l tmp_requested=5G
+#$ -N pca
+
+cd $SGE_O_WORKDIR
+BIN=$SGE_O_WORKDIR/../bin
+export PATH=$PATH:$BIN
+module load sccg/EIGENSOFT/prebuilt/6.1.4
+
+
+
+INPUT=het_filter/het_filter
+OUTPUT=pca/pca
+mkdir pca 
+plink --bfile ${INPUT} --recode --out ${OUTPUT} --noweb
+printf "genotypename:    ${OUTPUT}.ped\nsnpname:         ${OUTPUT}.map\nindivname:       ${OUTPUT}.ped\nevecoutname:     ${OUTPUT}.evec\nevaloutname:     ${OUTPUT}.eval\naltnormstyle:    NO\nnumoutevec:      5\nfamilynames:     NO\nnumoutlieriter:  0\n" > pca/par.smartpca
+smartpca -p pca/par.smartpca | tee ${OUTPUT}.pca

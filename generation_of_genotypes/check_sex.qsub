@@ -1,0 +1,18 @@
+## SGE SETTINGS
+#$ -cwd
+#$ -S /bin/bash
+#$ -q short.q
+#$ -r yes
+#$ -l mem_requested=5G
+#$ -l tmp_requested=5G
+#$ -N check_sex
+
+cd $SGE_O_WORKDIR
+BIN=$SGE_O_WORKDIR/../bin
+export PATH=$PATH:$BIN
+
+
+INPUT=indiv_missingness/indiv_missingness
+OUTPUT=check_sex
+mkdir $OUTPUT
+${BIN}/plink --bfile ${INPUT} --check-sex --out ${OUTPUT}/${OUTPUT} --noweb

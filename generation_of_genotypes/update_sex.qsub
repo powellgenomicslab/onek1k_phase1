@@ -1,0 +1,22 @@
+## SGE SETTINGS
+#$ -cwd
+#$ -S /bin/bash
+#$ -q short.q
+#$ -r yes
+#$ -l mem_requested=5G
+#$ -l tmp_requested=5G
+#$ -N update_sex
+
+cd $SGE_O_WORKDIR
+BIN=$SGE_O_WORKDIR/../bin
+export PATH=$PATH:$BIN
+
+printf "FID\tIID\tSEX\n241\t242\t2\n" > check_sex/check_sex.inds
+INPUT=indiv_missingness/indiv_missingness
+OUTPUT=update_sex
+mkdir $OUTPUT
+plink2 --bfile ${INPUT} --update-sex check_sex/check_sex.inds --make-bed --out ${OUTPUT}/${OUTPUT}
+printf "s/X/23/\ns/Y/24/\ns/MT/26/\n" > ${OUTPUT}/chr_coding
+paste <(sed -f ${OUTPUT}/chr_coding <(cut -f1 ${OUTPUT}/${OUTPUT}.bim)) <(cut -f2- ${OUTPUT}/${OUTPUT}.bim) > ${OUTPUT}/${OUTPUT}_tmp.bim
+mv ${OUTPUT}/${OUTPUT}.bim ${OUTPUT}/${OUTPUT}_plink2.bim
+mv ${OUTPUT}/${OUTPUT}_tmp.bim ${OUTPUT}/${OUTPUT}.bim

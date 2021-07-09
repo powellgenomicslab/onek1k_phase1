@@ -1,0 +1,17 @@
+## SGE SETTINGS
+#$ -cwd
+#$ -S /bin/bash
+#$ -q short.q
+#$ -r yes
+#$ -l mem_requested=10G
+#$ -l tmp_requested=10G
+#$ -N grm_singleton
+
+cd $SGE_O_WORKDIR
+BIN=$SGE_O_WORKDIR/../bin
+export PATH=$PATH:$BIN
+
+INPUT=grm/grm
+OUTPUT=grm_singleton
+mkdir $OUTPUT
+gcta64 --grm ${INPUT} --grm-singleton 0.05 --out ${OUTPUT}/${OUTPUT}

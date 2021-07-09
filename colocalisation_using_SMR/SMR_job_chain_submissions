@@ -1,0 +1,16 @@
+# Submit these bash files to run smr preparation chained jobs:
+
+bash SMR_job_chain.sh BimmNaive_array.txt
+bash SMR_job_chain.sh Bmem_array.txt 
+bash SMR_job_chain.sh CD4all_array.txt 
+bash SMR_job_chain.sh CD4eff_cm_array.txt
+bash SMR_job_chain.sh CD4TGFbStim_array.txt 
+bash SMR_job_chain.sh CD8all_array.txt 
+bash SMR_job_chain.sh CD8eff_array.txt 
+bash SMR_job_chain.sh CD8unknown_array.txt 
+bash SMR_job_chain.sh DC_array.txt 
+bash SMR_job_chain.sh MonoC_array.txt 
+bash SMR_job_chain.sh MonoNC_array.txt 
+bash SMR_job_chain.sh NKact_array.txt 
+bash SMR_job_chain.sh NKmat_array.txt 
+bash SMR_job_chain.sh Plasma_array.txt 

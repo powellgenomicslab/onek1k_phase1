@@ -1,0 +1,14 @@
+1 CD4all
+2 CD4effCM
+3 CD4TGFbStim
+4 CD8eff
+5 CD8all
+6 CD8unknown
+7 DC     
+8 Plasma  
+9 MonoC
+10 MonoNC
+11 Bmem
+12 BimmNaive
+13 NKmat
+14 NKact

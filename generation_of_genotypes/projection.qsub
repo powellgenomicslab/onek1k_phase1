@@ -1,0 +1,18 @@
+## SGE SETTINGS
+#$ -cwd
+#$ -S /bin/bash
+#$ -q short.q
+#$ -r yes
+#$ -l mem_requested=10G
+#$ -l tmp_requested=10G
+#$ -N projection
+
+cd $SGE_O_WORKDIR
+BIN=$SGE_O_WORKDIR/../bin
+export PATH=$PATH:$BIN
+
+INPUT=forward_strand/forward_strand
+OUTPUT=projection
+mkdir $OUTPUT
+
+gcta64 --bfile ${INPUT} --project-loading ../data/hapmap3/grm/grm_loadings 6 --out ${OUTPUT}/${OUTPUT}

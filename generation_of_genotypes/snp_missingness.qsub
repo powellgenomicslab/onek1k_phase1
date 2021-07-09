@@ -1,0 +1,18 @@
+## SGE SETTINGS
+#$ -cwd
+#$ -S /bin/bash
+#$ -q short.q
+#$ -r yes
+#$ -l mem_requested=5G
+#$ -l tmp_requested=5G
+#$ -N snp_missingness
+
+cd $SGE_O_WORKDIR
+BIN=$SGE_O_WORKDIR/../bin
+export PATH=$PATH:$BIN
+
+INPUT=../data/OneK1K_scRNA_genotype_snpsonly_v28032019/OneK1K_scRNA_genotype_snpsonly_v28032019
+OUTPUT=snp_missingness
+mkdir $OUTPUT
+SNP_RATE=0.03
+plink --bfile ${INPUT} --make-bed --geno ${SNP_RATE} --out ${OUTPUT}/${OUTPUT} --noweb

@@ -1,0 +1,17 @@
+## SGE SETTINGS
+#$ -cwd
+#$ -S /bin/bash
+#$ -q short.q
+#$ -r yes
+#$ -l mem_requested=5G
+#$ -l tmp_requested=5G
+#$ -N het_filter
+
+cd $SGE_O_WORKDIR
+BIN=$SGE_O_WORKDIR/../bin
+export PATH=$PATH:$BIN
+
+INPUT=hwe/hwe
+OUTPUT=het_filter
+mkdir $OUTPUT
+plink --bfile ${INPUT} --remove het/het.inds --make-bed --out ${OUTPUT}/${OUTPUT} --noweb

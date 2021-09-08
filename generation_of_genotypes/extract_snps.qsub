@@ -11,7 +11,7 @@ cd $SGE_O_WORKDIR
 BIN=$SGE_O_WORKDIR/../bin
 
 awk '{if(($5 ~ /A|G|C|T/) && $6 ~ (/A|G|C|T/)){print}}' ../data/OneK1K_Genotype_hg38_corrected_ids_remdup.bim | cut -f2 > extract_snps.txt
-INPUT=../data/OneK1K_Genotype_hg38_corrected_ids_remdup
+INPUT=../data/OneK1K_Genotype_hg19_corrected_ids_remdup
 OUTPUT=extract_snps
 mkdir $OUTPUT
 ${BIN}/plink --bfile ${INPUT} --extract extract_snps.txt --make-bed --out ${OUTPUT}/${OUTPUT} --noweb

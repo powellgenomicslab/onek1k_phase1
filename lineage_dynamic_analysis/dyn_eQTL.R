@@ -1,7 +1,7 @@
 #   ____________________________________________________________________________
 #   Script information                                                      ####
 
-# title: Identify OneK1K dynamic eQTLs in B cells
+# title: Plots OneK1K dynamic eQTL results from B cells
 # author: Jose Alquicira Hernandez
 # date: 2021-04-16
 # description: None
@@ -10,71 +10,26 @@
 #   HPC details                                                             ####
 
 # screen -S dyn-eqtl
-# qrsh -N dyn-eqtl -l mem_requested=100G -pe smp 1 -q short.q
-# conda activate r-4.0.3
+# qrsh -N dyn-eqtl -l mem_requested=20G -pe smp 1 -q short.q
+# conda activate r-4.1.0
 
 #   ____________________________________________________________________________
 #   Import libraries                                                        ####
 
 # Primary
-library("tidyverse")
 library("dsLib")
+library("data.table")
 
 # Secondary
-library("data.table")
-library("furrr")
+library("stringr")
 library("broom")
 library("ComplexHeatmap")
-library("ggvenn")
-
-
-#   ____________________________________________________________________________
-#   Future settings                                                         ####
-
-options(future.globals.maxSize = 1024^3*100)
-plan(multicore(workers = 2))
+library("LDlinkR")
 
 #   ____________________________________________________________________________
 #   Set output                                                              ####
 
-output <- set_output("2021-04-27", "dyn_eqtls")
-
-#   ____________________________________________________________________________
-#   Import gene expression data                                             ####
-
-
-path <- file.path("/",
-                  "directflow", 
-                  "SCCGGroupShare", 
-                  "projects", 
-                  "SeyhanYazar",
-                  "onek1k",
-                  "science_revision_Dec20",
-                  "pseudotime_analysis", 
-                  "bcell_six_quantile")
-
-exp_quantile_dirs <- list.files(path, full.names = TRUE, pattern = "Q")
-
-
-quantile_names <- exp_quantile_dirs %>%  str_split("/") %>% map_chr(~.[length(.)])
-
-exp_data <- future_map(exp_quantile_dirs, ~{
-  
-  message("Importing data from... \n", .x)
-  
-  files <- list.files(.x, pattern = "*log_residuals.tsv", full.names = TRUE)[1]
-  mats <- fread(file = files, data.table = FALSE)
-  mats <- mats %>% column_to_rownames("sampleid")
-  mats
-  
-})
-
-
-exp <- map(exp_data, colMeans)
-exp <- map(exp, ~{ tibble(gene = names(.), residual = .)})
-names(exp) <- quantile_names
-
-exp <- bind_rows(exp, .id = "quantile")
+output <- set_output("2021-10-06", "dyn_eqtls_summary")
 
 #   ____________________________________________________________________________
 #   Import data                                                             ####
@@ -86,396 +41,232 @@ path <- file.path("/",
                   "SeyhanYazar",
                   "onek1k",
                   "science_revision_Dec20",
-                  "pseudotime_analysis",
-                  "bcell_six_quantile",
-                  "matrixeqtl_outputs")
-
-
+                  "pseudotime-analysis_2021-09", 
+                  "matrix_output")
 quantile_dirs <- list.files(path, full.names = TRUE)
 
-quantile_data <- future_map(quantile_dirs, ~{
-  message("Importing data for", .x)
-  files <- list.files(.x, pattern = "*.tsv", full.names = TRUE)
-  chr <- files %>% str_split("/") %>% map(~.[length(.)]) %>% str_split("_") %>% 
-    map(2)
-  names(files) <- chr
-  mats <- map(files, fread, 
-              colClasses = c("character", "character", rep("numeric", 4)))
-  rbindlist(mats, idcol = "chr")
-})
+quantile_names <- sapply(str_split(quantile_dirs, "/"), 
+                         function(x) str_split(x[length(x)], "_", simplify = TRUE)[1,1])
 
-
-names(quantile_data) <- quantile_dirs %>% str_split("/") %>% map_chr(~.[length(.)])
+data <- lapply(quantile_dirs, fread)
+names(data) <- quantile_names
 
 
 # Combine data across quantiles
-data <- rbindlist(quantile_data, idcol = "quantile")
-
+data <- rbindlist(data, idcol = "quantile")
 
 # Index data by snp-gene pair
 data[,id :=  paste(SNP, gene, sep = "-")]
-
-inicio("Indexing...")
-setkey(data, id)
-fin()
-# ★  Elapsed time: 5.713 mins
-
-inicio("Save eQTL aggregated data")
-saveRDS(data, here(output, "eQTL.RDS"))
-#data <- readRDS(here(output, "eQTL.RDS"))
-fin()
-
-n_eqtl <- data[FDR < 0.05, .N, by = "quantile"][order(quantile),]
-
-# quantile     N
-# 1:       Q1 29983
-# 2:       Q2 25459
-# 3:       Q3 26046
-# 4:       Q4 29345
-# 5:       Q5 29330
-# 6:       Q6 42670
-
-summary(n_eqtl[["N"]])
-
+setkey(data, quantile, gene)
 
 #   ____________________________________________________________________________
-#   Import conditional analysis results                                     ####
+#   Read original analysis                                                  ####
 
-path <- file.path("/",
-                  "directflow", 
-                  "SCCGGroupShare", 
-                  "projects", 
-                  "SeyhanYazar",
-                  "onek1k",
-                  "science_revision_Dec20",
-                  "pseudotime_analysis",
-                  "bcell_six_quantile",
-                  "spearmans_output",
-                  "pseudotime_conditional_analysis_results_210425.tsv")
+# Read SNP information with rsids
+ref <- fread(here("data", "Revised_Supplementary_Tables.xlsx - Table.S10.tsv"), skip = 1)
 
-ceqtl <- fread(file = path)
-ceqtl <- ceqtl %>% mutate(id = paste(snpid, geneid, sep = "-"))
+# Load dynamic eQTL mapping
+dyn <- readRDS(here("results", "2021-10-06_dyn-eqtl", "dyn_eqtl_linear-sq_data.RDS"))
+setnames(dyn, "snpid", "SNP")
 
+# Get assessed allele
+dyn[, assessed_allele := lapply(str_split(SNP, "_"), "[", 2)]
 
-ceqtl[, .N, by = "eSNP_rank"][["N"]] %>% summary()
+# Retrieve significant dynamic eQTLs
+dyn_sig <- dyn[fdr < 0.05 | fdr_sq < 0.05]
 
+dyn_sig[fdr < 0.05 & !singular| fdr_sq < 0.05 & !singular_sq]
+# 299/333
 
-# Select SNP-gene pair info
-ceqtl <- ceqtl %>% 
-  select(id, snpid, geneid, rsid = ID) %>% 
-  distinct()
+# Retrieve MatrixEQTL results for each dynamic eQTL
+data_sig <- data[id %chin% dyn_sig$id, ]
 
+stopifnot(all(dyn_sig$id %in% data_sig$id))
 
-# Subset conditionl eQTLs from MatrixeQTL results
-data_sig <- data[ceqtl$id] %>% as_tibble()
+# Add dummy variable to specify pseudotime rank
+data_sig[, rank := as.integer(str_remove(quantile, "Q"))]
 
-# Add rsids
-data_sig <- full_join(data_sig, ceqtl[, c("id", "rsid")], by = "id")
-
-# Create explanatory numeric variable
-data_sig$rank <- data_sig$quantile %>% str_remove("Q") %>% as.integer()
-
-# Get SNP-gene pairs present in all quantiles
-data_filter <- data_sig %>% 
-  group_by(id) %>% 
-  tally() %>% 
-  filter(n == 6)
-
-# Subset ubiquitous pairs 
-data_sig <- data_sig[data_sig$id %in% data_filter$id, ]
+# Add rs ids
+setnames(ref, "SNP", "rsid")
+ref[, SNP := paste0(Chromosome,":", Position, "_", `SNP assessed allele`)]
+ref <- unique(ref[, .(SNP, rsid)])
+data_sig <- merge(data_sig, ref, by = "SNP")
+dyn_sig <- merge(dyn_sig, ref, by = "SNP")
 
 # Nest data by SNP-gene pairs
-data_sig <- data_sig %>% 
-  group_by(rsid, gene, id) %>% 
-  nest()
+data_sig <- data_sig[,.(data = list(.SD)), by = .(rsid, gene, id)]
 
+table(data_sig[, sapply(data, nrow)])
+# 3   4   5   6 
+# 18  35  15 265 
 
-#   ____________________________________________________________________________
-#   Identify dynamic eQTL                                                   ####
+# Merge dynamic mapping with MatrixEQTL results
+dyn_sig <- merge(dyn_sig, data_sig[, .(id, data)], by = c("id"))
 
-##  ............................................................................
-##  Linear regression                                                       ####
+# Get number of quantiles where eGene is expressed
+dyn_sig[, n_quantiles := sapply(data, nrow)]
 
-data_sig <- data_sig %>% 
-  mutate(linear_fit = map(data, ~{lm(beta ~ rank, .)}), 
-         tidy_linear_fit = map(linear_fit, tidy), 
-         glance_linear_fit = map(linear_fit, glance)
-  )
-
-
-lm_res <- data_sig %>% 
-  unnest("glance_linear_fit") %>% 
-  select(id, rsid, gene, r.squared, statistic, p.value) %>% 
-  filter(p.value < 0.05) %>% 
-  arrange(abs(statistic), desc(r.squared))
-
-##  ............................................................................
-##  Quadratic regression                                                    ####
-
-
-data_sig <- data_sig %>% 
-  mutate(quad_fit = map(data, ~{lm(beta ~ poly(rank, 2), .)}), 
-         tidy_quad_fit = map(quad_fit, tidy),
-         glance_quad_fit = map(quad_fit, glance)
-  )
-
-quad_res <- data_sig %>% 
-  unnest("glance_quad_fit") %>% 
-  select(id, rsid, gene, r.squared, statistic, p.value) %>% 
-  filter(p.value < 0.05) %>% 
-  arrange(abs(statistic), desc(r.squared))
-
-#   ____________________________________________________________________________
-#   Aggregate regression results                                            ####
-
-
-data_sig$pair <- paste(data_sig$rsid, data_sig$gene, sep = "-")
-
-res <- data_sig %>% 
-  ungroup() %>% 
-  select(id, pair, rsid, gene, data, 
-         linear = glance_linear_fit, quadratic = glance_quad_fit) %>% 
-  unnest("linear", names_sep = "_") %>% 
-  unnest("quadratic", names_sep = "_") %>% 
-  select(id, pair, rsid, gene,
-         linear_statistic, linear_p.value, linear_r.squared,
-         quadratic_statistic, quadratic_p.value, quadratic_r.squared) %>% 
-  mutate(linear_significant = if_else(linear_p.value < 0.05, TRUE, FALSE),
-         quadratic_significant = if_else(quadratic_p.value < 0.05, TRUE, FALSE),
-         trajectory = if_else(linear_significant | quadratic_significant, TRUE, FALSE))
-
-
-
+# Define SNP-gene pairs
+dyn_sig[, pair := paste0(rsid, "_", assessed_allele, "-", GeneID)]
 
 # Extract betas and transform to matrix format
-betas <- data_sig %>% 
-  ungroup() %>% 
-  select(pair, data) %>% 
-  unnest("data") %>% 
-  pivot_wider(id_cols = "pair", 
-              names_from = quantile,
-              values_from = beta)
+betas <- as.data.table(tidyr::unnest(dyn_sig[, .(pair, data)], "data"))
+betas <- dcast(betas, pair ~ quantile, value.var = "beta")
+betas <- betas[dyn_sig$pair]
+
+stopifnot(all(dyn_sig$pair == betas$pair))
 
 
-res <- full_join(res, betas, by = "pair")
+# Define linear and quadratic eQTLs
+dyn_sig[, linear_significant := fifelse(fdr < 0.05, TRUE, FALSE)]
+dyn_sig[, quadratic_significant := fifelse(fdr_sq < 0.05, TRUE, FALSE)]
 
-write_tsv(res %>% select(-id), here(output, "linear_quad_eQTL.tsv"))
-
-write_tsv(res %>% select(-id) %>% filter(trajectory), 
-          here(output, "trajectory_eQTL.tsv"))
-
-
-#   ____________________________________________________________________________
-#   Plot intersection of detected trajectory SNP-gene pairs                 ####
-
-
-lm_res_gene <- res %>% filter(linear_p.value < 0.05) %>% pull(gene) %>% unique()
-quad_res_gene <- res %>% filter(quadratic_p.value < 0.05) %>% pull(gene) %>% unique()
-
-res_genes <- list(lm = lm_res_gene, 
-                  quad = quad_res_gene)
-
-
-p <- ggvenn(
-  res_genes, 
-  fill_color = c("#0073C2FF", "#EFC000FF", "#868686FF"),
-  stroke_size = 0.5, set_name_size = 4
-)
-
-ggsave(here(output, "genes_shared.png"), p + ggtitle("Genes"))
-
-
-lm_assoc <- res %>% filter(linear_p.value < 0.05) %>% pull(id)
-quad_assoc <- res %>% filter(quadratic_p.value < 0.05) %>% pull(id)
-
-res_assoc <- list(lm = lm_assoc, 
-                  quad = quad_assoc)
-
-p <- ggvenn(
-  res_assoc, 
-  fill_color = c("#0073C2FF", "#EFC000FF", "#868686FF"),
-  stroke_size = 0.5, set_name_size = 4
-)
-
-ggsave(here(output, "assoc_shared.png"), p + ggtitle("SNP-gene pairs"))
-
+# Scale betas 
+all_scaled_betas <- betas[,.SD,.SDcols = patterns("Q")]
+rownames(all_scaled_betas) <- betas$pair
 
 
 #   ____________________________________________________________________________
-#   Plot beta estimates for significant results                             ####
+#   Import GWAS data                                                        ####
 
+# Define function to create batches
+chunk2 <- function(x,n) split(x, cut(seq_along(x), n, labels = FALSE))
 
-linear_scaled_betas <- res %>% 
-  ungroup() %>% 
-  filter(linear_significant) %>% 
-  select(pair, starts_with("Q", ignore.case = FALSE)) %>% 
-  column_to_rownames("pair") %>% 
-  apply(1, scale) %>% 
-  t() %>% 
-  `colnames<-`("Q" %p% 1:6) %>% 
-  as.data.frame() %>% 
-  rownames_to_column("pair") %>% 
-  mutate(method = "Linear")
+# Split eSNPs into 20 batches
+snps <- chunk2(dyn_sig[, rsid], 20)
 
-
-quadratic_scaled_betas <- res %>% 
-  ungroup() %>% 
-  filter(quadratic_significant) %>% 
-  select(pair, starts_with("Q", ignore.case = FALSE)) %>% 
-  column_to_rownames("pair") %>% 
-  apply(1, scale) %>% 
-  t() %>% 
-  `colnames<-`("Q" %p% 1:6) %>% 
-  as.data.frame() %>% 
-  rownames_to_column("pair") %>% 
-  mutate(method = "Quadratic")
-
-
-shared_genes <- intersect(linear_scaled_betas$pair, quadratic_scaled_betas$pair)
-
-
-all_scaled_betas <- bind_rows(linear_scaled_betas, 
-            quadratic_scaled_betas %>% filter(!pair %in% shared_genes))
-
-
-all_scaled_betas_mat <- all_scaled_betas %>% 
-  select(pair, starts_with("Q", ignore.case = FALSE)) %>% 
-  column_to_rownames("pair") %>% 
-  apply(1, scale) %>% 
-  t() %>% 
-  `colnames<-`("Q" %p% 1:6)
-
-
-all_scaled_betas$method <- factor(all_scaled_betas$method, 
-                                  levels = rev(c("Linear", "Quadratic")))
-
-# pdf(here(output, "all_scaled_betas_RdYlBu.pdf"), height = 9)
-# Heatmap(all_scaled_betas_mat, 
-#         col = RColorBrewer::brewer.pal(11, "RdYlBu"),
-#         cluster_columns = FALSE, 
-#         show_row_names = FALSE, 
-#         row_split = all_scaled_betas$method, 
-#         row_gap = unit(8, "mm"),
-#         heatmap_legend_param = list(title = expression("Scaled "*beta*" values")))
-# dev.off()
+# Retrieve SNPs in LD to each eSNP
+gwas <- lapply(snps, function(x){
+  tryCatch(LDtrait(x,
+                   pop = "GBR",
+                   r2d = "r2",
+                   r2d_threshold = 0.8,
+                   win_size = 500000,
+                   token = Sys.getenv("LDLINK_TOKEN"),
+                   file = FALSE), error = function(e) NA)
+})
 
 
 
+gwas <- lapply(gwas, as.data.table)
+gwas[[18]] <- NULL # Remove empty results
+gwas <- rbindlist(gwas)
+saveRDS(gwas, here(output, "gwas_r2_0.8.RDS"))
+# gwas <- readRDS(here(output, "gwas_r2_0.8.RDS"))
+
+autoimmune <-c("Type 1 diabetes", "Rheumatoid arthritis", "Inflammatory bowel disease", "Multiple sclerosis", "Crohn's disease", "Systemic lupus erythematosus", "Ankylosing spondylitis")
+
+gwas_autoimmune <- gwas[GWAS_Trait %chin% autoimmune]
+gwas_autoimmune <- unique(gwas_autoimmune[, .(snp = Query, GWAS_Trait)])
+
+# Validate with GWAS catalog
+gwas_catalog <- fread("data/gwas_catalog_11-10-21", sep = "\t", quote = "", fill = TRUE)
+snps <- unlist(snps, use.names = FALSE)
 
 
-gwas <- fread(here("data", "b_cells_gwas", "B_cell_GWAS_dynamic_GWAS_7AI.csv"))
-gwas[,pair := paste(ID, gene, sep = "-")]
-setkey(gwas, pair)
+gwas_catalog[, snp_list := sapply(SNPS, function(x) str_split(x, ","))]
 
 
-gwas <- gwas[, .(pair, GWAS_Trait)]
-gwas <- unique(gwas, by = c("pair", "GWAS_Trait"))
-gwas <- gwas[,.(pair, GWAS_Trait)][, .N, by = "pair"]
-
-lintersect(all_scaled_betas$pair,  gwas$pair)
-setdiff(gwas$pair, all_scaled_betas$pair)
-
-all_scaled_betas <- left_join(all_scaled_betas, gwas, by = "pair")
+gwas_catalog_sub <- gwas_catalog[sapply(snp_list, function(x) any(x %chin% snps)), ]
+gwas_catalog_sub <- gwas_catalog_sub[, .(snp = SNPS, GWAS_Trait = `DISEASE/TRAIT`)]
 
 
+gwas_catalog_sub <- unique(gwas_catalog_sub[GWAS_Trait %in% autoimmune, ])
 
-all_scaled_betas <- all_scaled_betas %>% mutate(gwas = if_else(is.na(N), "False", "True")) 
+gwas_autoimmune <- unique(rbind(gwas_autoimmune, gwas_catalog_sub))
+
+#   ____________________________________________________________________________
+#   Combine GWAS hits with dynamic eQTLs                                    ####
+
+dyn_sig[, gwas := ifelse(rsid %in% gwas_autoimmune$snp, "True", "False")]
 
 
-model <-  factor(all_scaled_betas$method, 
-                 levels = c("Linear", "Quadratic"))
+dyn_sig[, method := fifelse(linear_significant & !quadratic_significant , "Linear", 
+                            fifelse(!linear_significant & quadratic_significant, "Quadratic", 
+                                    "Linear & Quadratic"))]
 
-gwas <-  factor(all_scaled_betas$gwas, 
-                 levels = c("True", "False"))
-table(gwas)
 
-ha <-  HeatmapAnnotation(Model = model,
-                       col = list(Model = c(Linear = "#38618c", 
-                                            Quadratic = "#ff5964")
-                                  ),
-                       annotation_label = ""
-                       )
+dyn_sig[, method := factor(method, levels = c("Linear", "Quadratic", "Linear & Quadratic"))]
+dyn_sig[, method := factor(method, levels = c("Linear", "Linear & Quadratic", "Quadratic"))]
+dyn_sig[, gwas := factor(gwas, levels = c("True", "False"))]
 
 
 
-hb <-  HeatmapAnnotation(`Autoimmune GWAS` = gwas,
-                         col = list(
-                           `Autoimmune GWAS` = c(False = "#296A6C", 
-                                             True = "#F89423")
+ha <-  HeatmapAnnotation(Model = dyn_sig$method,
+                         col = list(Model = c(Linear = "#38618c", 
+                                              "Linear & Quadratic" = "#F6D65C",
+                                              Quadratic = "#ff5964"
+                                              )
                          )
 )
 
 
 
-pdf(here(output, "all_scaled_betas_RdYlBu_transp.pdf"), height = 3, width = 12)
-Heatmap(all_scaled_betas_mat %>% t(),
-        col = RColorBrewer::brewer.pal(11, "RdYlBu"),
+hb <-  HeatmapAnnotation(`Autoimmune GWAS` = dyn_sig$gwas,
+                         col = list(
+                           `Autoimmune GWAS` = c(False = "#296A6C", 
+                                                 True = "#F89423")
+                         )
+)
+
+
+# Convert effect size data.table to matrix
+all_scaled_betas_mat <- apply(all_scaled_betas, 1, scale)
+colnames(all_scaled_betas_mat) <- dyn_sig$pair
+rownames(all_scaled_betas_mat) <- names(all_scaled_betas)
+
+
+# Define eucledian distance function to deal with NA values
+robust_euclidean <- function(x, y){
+  x[is.na(x)] <- 0
+  y[is.na(y)] <- 0
+  sqrt(sum((x - y) ^ 2))
+}
+
+postscript(here(output, "heatmap_betas.eps"), height = 3, width = 17)
+Heatmap(all_scaled_betas_mat,
+        col = rev(RColorBrewer::brewer.pal(11, "RdYlBu")),
         top_annotation = ha,
         bottom_annotation = hb,
+        na_col = "gray",
         row_title = "Pseudotime",
         column_title = "eQTL",
         column_title_side = "bottom",
         cluster_rows  = FALSE, 
-        #show_column_names = FALSE, 
+        clustering_distance_columns = robust_euclidean,
         column_names_gp = grid::gpar(fontsize = 2),
-        column_split = all_scaled_betas$method, 
+        column_split = dyn_sig$method, 
         column_gap = unit(0, "mm"), 
         row_names_side = "left",
         heatmap_legend_param = list(title = expression("Scaled "*beta*" values")))
 dev.off()
 
+# Add GWAS hits
+gwas_autoimmune_summary <- gwas_autoimmune[, .(rsid = snp, GWAS_Trait)][, .(GWAS_Trait = paste0(.SD$GWAS_Trait, collapse = ",")), rsid]
+dyn_sig <- merge(dyn_sig, gwas_autoimmune_summary, by = "rsid", all.x = TRUE)
+
+dyn_sig_summary <- dyn_sig[, .(SNP = rsid, 
+                               `Gene ID`= GeneID, 
+                               ID = id, 
+                               `Linear p-value` = p.value, 
+                               `Linear FDR` = fdr, 
+                               `Quadratic p-value` = p.value_sq, 
+                               `Quadratic FDR` = fdr_sq, 
+                               `Type` = method, 
+                               `GWAS Trait` = GWAS_Trait,
+                               pair)]
+
+dyn_sig_summary <- merge(dyn_sig_summary, betas, by = "pair")
+dyn_sig_summary[, pair := NULL]
+dyn_sig_summary <- dyn_sig_summary[order(`Linear FDR`, `Quadratic FDR` )]
 
 #   ____________________________________________________________________________
-#   Plot trajectory eQTLs                                                   ####
+#   Export results                                                          ####
 
-res_exp <- res %>% 
-  ungroup() %>% 
-  filter(trajectory) %>% 
-  select(id, pair, rsid, gene , starts_with("Q", ignore.case = FALSE)) %>% 
-  pivot_longer("Q" %p% 1:6, names_to = "quantile", values_to = "beta") %>% 
-  left_join(exp, by = c("quantile", "gene"))
-
-res_exp$rank <- str_remove(res_exp$quantile, "Q") %>% as.integer()
-
-res_exp <- split(res_exp, res_exp$pair) %>% map(as.data.frame)
-
-dir.create(here(output, "plots"))
-dir.create(here(output, "plots", "linear"))
-dir.create(here(output, "plots", "quad"))
-
-
-plot_pair <- function(x, name){
-  
-  p_quad <- ggplot(x, aes(rank, beta)) +
-    geom_point(size = 3, color = "gray20") +
-    stat_smooth(method = "lm", se = FALSE, color = "red", formula = y ~ poly(x, 2)) +
-    xlab("Quantile") +
-    ylab(expression(beta)) +
-    ggtitle(name) +
-    scale_x_continuous(breaks = 1:6) +
-    theme_pub()
-  ggsave(here(output, "plots",  "quad", name %p% ".pdf"), p_quad, height = 4.5, width = 6)
-  
-  
-  p_lm <- ggplot(x, aes(rank, beta)) +
-    geom_point(size = 3, color = "gray20") +
-    stat_smooth(method = "lm", se = FALSE, color = "red") +
-    xlab("Quantile") +
-    ylab(expression(beta)) +
-    ggtitle(name) +
-    scale_x_continuous(breaks = 1:6) +
-    theme_pub()
-  ggsave(here(output, "plots",  "linear", name %p% ".pdf"), p_lm, height = 4.5, width = 6)
-  
-}
-
-
-iwalk(res_exp, plot_pair)
-
+fwrite(dyn_sig_summary, here(output, "dyn-eqtl_summary.tsv"), sep = "\t")
 
 #   ____________________________________________________________________________
 #   Session info                                                            ####
 
 print_session(here(output))
-
 
